@@ -189,8 +189,18 @@ if update:
 
             fig.update_layout(
                 title='Constrained Optimization Plot',
-                xaxis=dict(title='x', range=[xmin, xmax], color='black', tickfont=dict(color='black'), titlefont=dict(color='black')),
-                yaxis=dict(title='y', range=[ymin, ymax], color='black', tickfont=dict(color='black'), titlefont=dict(color='black')),
+                xaxis=dict(
+                    title=dict(text='x', font=dict(color='black')),
+                    range=[xmin, xmax],
+                    color='black',
+                    tickfont=dict(color='black')
+                ),
+                yaxis=dict(
+                    title=dict(text='y', font=dict(color='black')),
+                    range=[ymin, ymax],
+                    color='black',
+                    tickfont=dict(color='black')
+                ),
                 plot_bgcolor='white',
                 paper_bgcolor='white',
                 font=dict(family='Arial', size=14, color='black'),
