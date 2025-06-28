@@ -121,10 +121,26 @@ if update:
                     showlabels=True,
                     start=np.nanmin(Z),
                     end=np.nanmax(Z),
-                    size=(np.nanmax(Z) - np.nanmin(Z)) / 7  # Fewer level curves for clarity
+                    size=(np.nanmax(Z) - np.nanmin(Z)) / 7
                 ),
                 line=dict(color='black', width=2),
                 name='f(x,y)'
+            ))
+
+            fig.add_trace(go.Contour(
+                z=Z,
+                x=x_vals,
+                y=y_vals,
+                showscale=False,
+                contours=dict(
+                    start=rhs_val,
+                    end=rhs_val,
+                    size=1e-8,
+                    coloring='lines',
+                    showlabels=False
+                ),
+                line=dict(color='blue', width=3),
+                name='Constraint Boundary'
             ))
 
             fig.add_trace(go.Contour(
@@ -173,8 +189,8 @@ if update:
 
             fig.update_layout(
                 title='Constrained Optimization Plot',
-                xaxis=dict(title='x', range=[xmin, xmax], color='black'),
-                yaxis=dict(title='y', range=[ymin, ymax], color='black'),
+                xaxis=dict(title='x', range=[xmin, xmax], color='black', tickfont=dict(color='black'), titlefont=dict(color='black')),
+                yaxis=dict(title='y', range=[ymin, ymax], color='black', tickfont=dict(color='black'), titlefont=dict(color='black')),
                 plot_bgcolor='white',
                 paper_bgcolor='white',
                 font=dict(family='Arial', size=14, color='black'),
