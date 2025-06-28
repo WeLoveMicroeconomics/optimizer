@@ -138,11 +138,10 @@ if update:
                 z=feasible_mask.astype(float),
                 x=x_vals,
                 y=y_vals,
-                colorscale=[[0, 'rgba(0,0,0,0)'], [1, 'rgba(30,144,255,0.7)']],
-                contours=dict(coloring='heatmap', showlines=False),
-                showscale=False,
-                opacity=0.8,
-                name='Feasible Region'
+                colorscale='Viridis',                # More visible colorscale
+                contours=dict(coloring='lines', showlabels=True),
+                line=dict(width=2),
+                name='f(x,y)'
             ))
 
             fig.add_trace(go.Scatter(
