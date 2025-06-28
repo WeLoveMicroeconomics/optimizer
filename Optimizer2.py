@@ -1,135 +1,146 @@
 import streamlit as st
 import numpy as np
 import plotly.graph_objects as go
-from sympy import symbols, lambdify, sympify, Min, Max, diff
+from sympy import symbols, sympify, lambdify, Min, Max, diff
 from scipy.optimize import linprog
 
-st.set_page_config(page_title="Constrained Optimization Visualizer", layout="wide")
+st.title("Constrained Optimization Visualizer")
 
-st.title("Constrained Optimization Visualizer with LP Solver")
+# User Inputs
+f_expr_str = st.text_input("Objective function f(x, y):", "x + 2*y")
+constraint_expr_str = st.text_input("Constraint (e.g., x + y <= 10):", "x + y <= 10")
 
-# User inputs
-f_expr = st.text_input("Objective function f(x, y):", "x + 2*y")
-constraint_expr = st.text_input("Constraint (e.g., x + y <= 10):", "x + y <= 10")
-xmin, xmax = st.slider("x range", -20.0, 20.0, (0.0, 10.0))
-ymin, ymax = st.slider("y range", -20.0, 20.0, (0.0, 10.0))
+col1, col2 = st.columns(2)
+with col1:
+    xmin = st.number_input("x min", value=0.0)
+    xmax = st.number_input("x max", value=10.0)
+with col2:
+    ymin = st.number_input("y min", value=0.0)
+    ymax = st.number_input("y max", value=10.0)
 
-# Create grid
-x_vals = np.linspace(xmin, xmax, 300)
-y_vals = np.linspace(ymin, ymax, 300)
-X, Y = np.meshgrid(x_vals, y_vals)
+if st.button("Update Plot"):
+    x, y = symbols('x y')
 
-# Symbolic variables
-x, y = symbols('x y')
-local_dict = {'min': Min, 'max': Max}
-
-try:
-    f_sym = sympify(f_expr, locals=local_dict)
-    f_func = lambdify((x, y), f_sym, modules=['numpy'])
-    Z = f_func(X, Y)
-except Exception as e:
-    st.error(f"Invalid function: {e}")
-    st.stop()
-
-# Constraint handling
-try:
-    if '<=' in constraint_expr:
-        lhs, rhs = constraint_expr.split('<=')
-        bound = float(rhs.strip())
-        lhs_func = lambdify((x, y), sympify(lhs.strip(), locals=local_dict), modules=['numpy'])
-        mask = lhs_func(X, Y) <= bound
-    elif '==' in constraint_expr:
-        lhs, rhs = constraint_expr.split('==')
-        bound = float(rhs.strip())
-        lhs_func = lambdify((x, y), sympify(lhs.strip(), locals=local_dict), modules=['numpy'])
-        mask = np.isclose(lhs_func(X, Y), bound)
-    else:
-        st.error("Only '<=' and '==' constraints are supported.")
+    # Support min, max functions in sympify
+    local_dict = {"min": Min, "max": Max}
+    try:
+        f_expr = sympify(f_expr_str, locals=local_dict)
+        constraint_expr = sympify(constraint_expr_str.replace("<=", "-" + str(0)), locals=local_dict)
+    except Exception as e:
+        st.error(f"Invalid expression: {e}")
         st.stop()
-except Exception as e:
-    st.error(f"Invalid constraint: {e}")
-    st.stop()
 
-# Linear programming solver setup
-try:
-    grad_x = float(diff(f_sym, x).subs({x: 0, y: 0}))
-    grad_y = float(diff(f_sym, y).subs({x: 0, y: 0}))
-except:
-    grad_x, grad_y = 0, 0
+    f_func = lambdify((x, y), f_expr, "numpy")
+    constraint_func = lambdify((x, y), constraint_expr, "numpy")
 
-c = [-grad_x, -grad_y]  # Negate for maximization
-A, b = [], []
+    x_vals = np.linspace(xmin, xmax, 300)
+    y_vals = np.linspace(ymin, ymax, 300)
+    X, Y = np.meshgrid(x_vals, y_vals)
 
-if '<=' in constraint_expr:
-    lhs, rhs = constraint_expr.split('<=')
-    lhs_x = float(diff(sympify(lhs, locals=local_dict), x).subs({x: 0, y: 0}))
-    lhs_y = float(diff(sympify(lhs, locals=local_dict), y).subs({x: 0, y: 0}))
-    A.append([lhs_x, lhs_y])
-    b.append(float(rhs.strip()))
+    Z = f_func(X, Y)
+    try:
+        feasible_mask = constraint_func(X, Y) <= 0
+    except:
+        st.error("Constraint evaluation failed. Ensure correct syntax.")
+        st.stop()
 
-bounds = [(xmin, xmax), (ymin, ymax)]
+    # Gradient at max point (partial derivatives)
+    try:
+        fx = diff(f_expr, x)
+        fy = diff(f_expr, y)
+    except:
+        fx = fy = 0
 
-result = linprog(c, A_ub=A, b_ub=b, bounds=bounds, method='highs')
+    fx_func = lambdify((x, y), fx, "numpy")
+    fy_func = lambdify((x, y), fy, "numpy")
 
-if result.success:
-    opt_x, opt_y = result.x
-    opt_val = f_func(opt_x, opt_y)
-else:
-    opt_x = opt_y = opt_val = np.nan
+    # Linear optimization for linear objectives
+    try:
+        c = [-fx_func(0, 0), -fy_func(0, 0)]  # Coefficients negated for maximization
+        A = []
+        b = []
 
-# Plotting
-fig = go.Figure()
+        if "<=" in constraint_expr_str:
+            left, right = constraint_expr_str.split("<=")
+            left_expr = sympify(left, locals=local_dict)
+            coef_x = diff(left_expr, x).subs({x: 0, y: 0})
+            coef_y = diff(left_expr, y).subs({x: 0, y: 0})
+            rhs = float(right)
+            A.append([float(coef_x), float(coef_y)])
+            b.append(rhs)
 
-fig.add_trace(go.Contour(
-    z=Z,
-    x=x_vals,
-    y=y_vals,
-    colorscale='Viridis',
-    contours=dict(coloring='lines', showlabels=True),
-    line=dict(color='black', width=2),
-    name='f(x,y)'
-))
+        bounds = [(xmin, xmax), (ymin, ymax)]
 
-fig.add_trace(go.Contour(
-    z=mask.astype(float),
-    x=x_vals,
-    y=y_vals,
-    showscale=False,
-    opacity=0.7,
-    colorscale=[[0, 'rgba(0,0,0,0)'], [1, 'rgba(30,144,255,0.5)']],
-    contours=dict(coloring='heatmap', showlines=False),
-    name='Feasible Region'
-))
+        res = linprog(c, A_ub=A, b_ub=b, bounds=bounds)
 
-if result.success:
-    fig.add_trace(go.Scatter(
-        x=[opt_x],
-        y=[opt_y],
-        mode='markers+text',
-        marker=dict(color='red', size=10),
-        text=['Max'],
-        textposition='top center',
-        name='Maximum Point'
+        if res.success:
+            max_x, max_y = res.x
+            max_val = f_func(max_x, max_y)
+            grad_x = fx_func(max_x, max_y)
+            grad_y = fy_func(max_x, max_y)
+        else:
+            st.warning("Optimization failed. Showing feasible region only.")
+            max_x = max_y = max_val = grad_x = grad_y = None
+    except:
+        st.warning("Non-linear objective or constraint. Skipping optimization.")
+        max_x = max_y = max_val = grad_x = grad_y = None
+
+    # Plotting
+    fig = go.Figure()
+
+    fig.add_trace(go.Contour(
+        z=Z,
+        x=x_vals,
+        y=y_vals,
+        colorscale='Viridis',
+        contours=dict(coloring='lines', showlabels=True),
+        line=dict(color='black', width=2),
+        showscale=False,
+        name="Level Curves"
     ))
 
-    fig.add_shape(type='line',
-        x0=opt_x, y0=opt_y, x1=opt_x + grad_x, y1=opt_y + grad_y,
-        line=dict(color='red', width=2, dash='dot')
+    fig.add_trace(go.Contour(
+        z=feasible_mask.astype(float),
+        x=x_vals,
+        y=y_vals,
+        colorscale=[[0, 'rgba(0,0,0,0)'], [1, 'rgba(30,144,255,0.5)']],
+        showscale=False,
+        opacity=0.5,
+        name="Feasible Region"
+    ))
+
+    if max_x is not None:
+        fig.add_trace(go.Scatter(
+            x=[max_x],
+            y=[max_y],
+            mode='markers+text',
+            marker=dict(color='red', size=10),
+            text=["Max"],
+            textposition="top center",
+            name="Maximum"
+        ))
+
+        fig.add_trace(go.Scatter(
+            x=[max_x, max_x + grad_x],
+            y=[max_y, max_y + grad_y],
+            mode='lines',
+            line=dict(color='red', dash='dot'),
+            name="Gradient"
+        ))
+
+    fig.update_layout(
+        title="Constrained Optimization Plot",
+        xaxis_title="x",
+        yaxis_title="y",
+        xaxis_range=[xmin, xmax],
+        yaxis_range=[ymin, ymax],
+        template="plotly_white",
+        legend=dict(orientation="h")
     )
 
-fig.update_layout(
-    title='Constrained Optimization Plot',
-    xaxis=dict(title='x', range=[xmin, xmax], color='black'),
-    yaxis=dict(title='y', range=[ymin, ymax], color='black'),
-    plot_bgcolor='white',
-    paper_bgcolor='white',
-    font=dict(family='Arial', size=14, color='black'),
-    legend=dict(orientation='h')
-)
+    st.plotly_chart(fig)
 
-st.plotly_chart(fig, use_container_width=True)
-
-if result.success:
-    st.success(f"Maximum at (x, y) = ({opt_x:.4f}, {opt_y:.4f}) with f(x, y) = {opt_val:.4f}")
-else:
-    st.warning("Linear programming did not find a feasible solution.")
+    if max_x is not None:
+        st.markdown(f"**Maximum at:** ({max_x:.4f}, {max_y:.4f})  ")
+        st.markdown(f"**Objective value:** {max_val:.4f}")
+        st.markdown(f"**Gradient:** (df/dx = {grad_x:.2f}, df/dy = {grad_y:.2f})")
