@@ -1,0 +1,5 @@
+streamlit
+numpy
+plotly.graph_objs as
+sympy
+scipy.optimize
