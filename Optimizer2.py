@@ -121,7 +121,7 @@ if update:
                     showlabels=True,
                     start=np.nanmin(Z),
                     end=np.nanmax(Z),
-                    size=(np.nanmax(Z) - np.nanmin(Z)) / 15
+                    size=(np.nanmax(Z) - np.nanmin(Z)) / 7  # Fewer level curves for clarity
                 ),
                 line=dict(color='black', width=2),
                 name='f(x,y)'
