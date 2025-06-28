@@ -1,7 +1,7 @@
 import streamlit as st
 import numpy as np
 import plotly.graph_objs as go
-from sympy import symbols, sympify, lambdify
+from sympy import symbols, sympify, lambdify, Eq, solve
 from scipy.optimize import minimize
 
 st.set_page_config(layout="wide")
@@ -111,6 +111,7 @@ if update:
 
             fig = go.Figure()
 
+            # Function contours (fewer levels for legibility)
             fig.add_trace(go.Contour(
                 z=Z,
                 x=x_vals,
@@ -127,33 +128,19 @@ if update:
                 name='f(x,y)'
             ))
 
-            fig.add_trace(go.Contour(
-                z=Z,
-                x=x_vals,
-                y=y_vals,
-                showscale=False,
-                contours=dict(
-                    start=rhs_val,
-                    end=rhs_val,
-                    size=1e-8,
-                    coloring='lines',
-                    showlabels=False
-                ),
-                line=dict(color='blue', width=3),
-                name='Constraint Boundary'
-            ))
-
+            # Feasible region heatmap
             fig.add_trace(go.Contour(
                 z=feasible_mask.astype(float),
                 x=x_vals,
                 y=y_vals,
                 showscale=False,
                 opacity=0.7,
-                colorscale=[[0, 'rgba(0,0,0,0)'], [1, 'rgba(30,144,255,0.5)']],
+                colorscale=[[0, 'rgba(0,0,0,0)'], [1, 'rgba(30,144,255,0.3)']],
                 contours=dict(coloring='heatmap', showlines=False),
                 name='Feasible Region'
             ))
 
+            # Level curve at maximum value
             fig.add_trace(go.Contour(
                 z=Z,
                 x=x_vals,
@@ -170,6 +157,7 @@ if update:
                 name='Level Curve at f(max)'
             ))
 
+            # Maximum point
             fig.add_trace(go.Scatter(
                 x=[max_point[0]],
                 y=[max_point[1]],
@@ -180,12 +168,57 @@ if update:
                 name='Maximum Point'
             ))
 
+            # Gradient arrow at max
             fig.add_shape(
                 type='line',
                 x0=max_point[0], y0=max_point[1],
                 x1=arrow_x, y1=arrow_y,
                 line=dict(color='red', width=2, dash='dot')
             )
+
+            # === Plot constraint boundary explicitly as a blue line ===
+            try:
+                constraint_eq = Eq(lhs_sym, rhs_val)
+
+                # Solve for y in terms of x
+                y_solutions = solve(constraint_eq, y_sym)
+                if y_solutions:
+                    y_func = lambdify(x_sym, y_solutions[0], 'numpy')
+                    x_line = np.linspace(xmin, xmax, 500)
+                    y_line = y_func(x_line)
+                    mask = (y_line >= ymin) & (y_line <= ymax)
+                    x_line = x_line[mask]
+                    y_line = y_line[mask]
+
+                    fig.add_trace(go.Scatter(
+                        x=x_line,
+                        y=y_line,
+                        mode='lines',
+                        line=dict(color='blue', width=3),
+                        name='Constraint Boundary'
+                    ))
+                else:
+                    # Try solve for x in terms of y
+                    x_solutions = solve(constraint_eq, x_sym)
+                    if x_solutions:
+                        x_func = lambdify(y_sym, x_solutions[0], 'numpy')
+                        y_line = np.linspace(ymin, ymax, 500)
+                        x_line = x_func(y_line)
+                        mask = (x_line >= xmin) & (x_line <= xmax)
+                        y_line = y_line[mask]
+                        x_line = x_line[mask]
+
+                        fig.add_trace(go.Scatter(
+                            x=x_line,
+                            y=y_line,
+                            mode='lines',
+                            line=dict(color='blue', width=3),
+                            name='Constraint Boundary'
+                        ))
+                    else:
+                        warning_placeholder.warning("Constraint boundary cannot be plotted.")
+            except Exception as e:
+                warning_placeholder.warning(f"Failed to plot constraint boundary: {e}")
 
             fig.update_layout(
                 title='Constrained Optimization Plot',
