@@ -123,7 +123,7 @@ if update:
                 st.error("Matplotlib is not installed. Add `matplotlib>=3.8.0` to requirements.txt and rerun.")
                 st.stop()
 
-            fig, ax = plt.subplots(figsize=(8, 6), dpi=150)
+            fig, ax = plt.subplots(figsize=(5, 4), dpi=120)
 
             # feasible fill (subtle)
             if show_feasible:
