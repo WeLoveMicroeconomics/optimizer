@@ -151,7 +151,7 @@ ax.annotate("∇f",
 # Constraint boundary
 try:
     constraint_eq = Eq(lhs_sym, rhs_val)
-    bstyle = "-" if operator == "==" else "--"
+    bstyle = "-"
     y_solutions = solve(constraint_eq, y_sym)
     if y_solutions:
         y_func = lambdify(x_sym, y_solutions[0], "numpy")
