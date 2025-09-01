@@ -8,7 +8,7 @@ from scipy.optimize import minimize
 # App + Layout
 # =========================
 st.set_page_config(layout="wide")
-st.title("Constrained Optimization Visualizer (Clean Contours)")
+st.title("Constrained Optimization Visualizer (Robust Rendering)")
 
 # --- Inputs (left) & Style (right) ---
 col_in, col_style = st.columns([2, 1])
@@ -27,9 +27,14 @@ with col_in:
 
 with col_style:
     st.markdown("### Plot Style")
-    colors = st.text_input("Colors (comma-separated)", value="black,royalblue,crimson,teal")
-    linestyles = st.text_input("Line styles (comma-separated)", value="-,--,:")
-    n_levels = st.slider("Number of f-contour levels", min_value=5, max_value=20, value=9, step=1)
+    render_mode = st.selectbox(
+        "Render mode",
+        ["Heatmap + lines (robust)", "Contours only"],
+        index=0
+    )
+    colors = st.text_input("Contour color(s)", value="black")
+    linestyles = st.text_input("Line style(s)", value="-")
+    n_levels = st.slider("Number of contour levels", 5, 20, 9, 1)
     show_feasible = st.toggle("Show feasible fill", value=True)
     show_grid = st.toggle("Show grid", value=True)
     equal_axes = st.toggle("Equal axis scale", value=True)
@@ -43,16 +48,10 @@ plot_placeholder = st.empty()
 diag_placeholder = st.empty()
 explanation_placeholder = st.empty()
 
-# =========================
-# Helper: line style to dash
-# =========================
 def mpl_ls_to_plotly_dash(s):
     s = s.strip()
     return {"-": "solid", "--": "dash", "-.": "dashdot", ":": "dot"}.get(s, "solid")
 
-# =========================
-# Main
-# =========================
 if update:
     if xmin >= xmax or ymin >= ymax:
         warning_placeholder.error("Ensure that min values are less than max values.")
@@ -83,7 +82,7 @@ if update:
             rhs_val = float(rhs_str.strip())
             lhs_func = lambdify((x_sym, y_sym), lhs_sym, "numpy")
 
-            # --- SciPy constraint ---
+            # --- SciPy constraint (maximize f by minimizing -f) ---
             if operator == "<=":
                 cons = {'type': 'ineq', 'fun': lambda v: rhs_val - lhs_func(v[0], v[1])}
             else:
@@ -98,14 +97,12 @@ if update:
                         val = val.item()
                     if np.isnan(val):
                         return 1e10
-                    # SciPy minimizes; negate to maximize
                     return -val
                 except Exception:
                     return 1e10
 
             x0 = [(xmin + xmax) / 2, (ymin + ymax) / 2]
             res = minimize(objective, x0, bounds=bounds, constraints=cons)
-
             if not res.success:
                 warning_placeholder.error(f"Optimization failed: {res.message}")
                 st.stop()
@@ -120,12 +117,10 @@ if update:
                 for i in range(len(v)):
                     v_eps1 = v.copy(); v_eps2 = v.copy()
                     v_eps1[i] += eps; v_eps2[i] -= eps
-                    f1 = func(v_eps1)
-                    f2 = func(v_eps2)
+                    f1 = func(v_eps1); f2 = func(v_eps2)
                     grad[i] = (f1 - f2) / (2 * eps)
                 return grad
-
-            grad = -num_grad(objective, max_point)  # ∇f
+            grad = -num_grad(objective, max_point)
 
             # --- Grid + fields ---
             x_vals = np.linspace(xmin, xmax, 400)
@@ -136,22 +131,16 @@ if update:
                 Z = Z * np.ones_like(X, dtype=float)
 
             lhs_grid = lhs_func(X, Y)
-            if operator == "<=":
-                feasible_mask = lhs_grid <= rhs_val + 1e-9
-            else:
-                feasible_mask = np.abs(lhs_grid - rhs_val) < 1e-6
+            feasible_mask = (lhs_grid <= rhs_val + 1e-9) if operator == "<=" else (np.abs(lhs_grid - rhs_val) < 1e-6)
 
-            # --- Contour levels (robust form) ---
-            zmin = float(np.nanmin(Z))
-            zmax = float(np.nanmax(Z))
+            # --- Level sanity ---
+            zmin = float(np.nanmin(Z)); zmax = float(np.nanmax(Z))
             if not np.isfinite(zmin) or not np.isfinite(zmax):
                 warning_placeholder.error("Function produced non-finite values on the grid.")
                 st.stop()
             if np.isclose(zmin, zmax):
-                zmin -= 1.0
-                zmax += 1.0
+                zmin -= 1.0; zmax += 1.0
 
-            # Pick first color & linestyle from the inputs
             line_color = (colors.split(",")[0] or "black").strip()
             first_ls = (linestyles.split(",")[0] or "-").strip()
             line_dash = mpl_ls_to_plotly_dash(first_ls)
@@ -166,9 +155,7 @@ if update:
                 feasible_float = feasible_mask.astype(float)
                 feasible_float[~feasible_mask] = np.nan
                 fig.add_trace(go.Contour(
-                    z=feasible_float,
-                    x=x_vals,
-                    y=y_vals,
+                    z=feasible_float, x=x_vals, y=y_vals,
                     showscale=False,
                     contours=dict(coloring='heatmap', showlines=False),
                     name='Feasible region',
@@ -177,18 +164,32 @@ if update:
                     colorscale=[[0, 'rgba(0,0,0,0)'], [1, 'rgba(30,144,255,1)']]
                 ))
 
-            # f(x,y) contours: single trace with multiple levels (lines only)
-            fig.add_trace(go.Contour(
-                z=Z,
-                x=x_vals,
-                y=y_vals,
-                showscale=False,
-                ncontours=int(n_levels),  # <-- FIX: at trace level
-                contours=dict(coloring='lines', showlabels=False),
-                line=dict(color=line_color, width=2, dash=line_dash),
-                name="f contours",
-                hoverinfo="skip"
-            ))
+            # Main surface so you always see something:
+            if render_mode == "Heatmap + lines (robust)":
+                # faint heatmap
+                fig.add_trace(go.Heatmap(
+                    z=Z, x=x_vals, y=y_vals, colorscale="Greys",
+                    opacity=0.25, showscale=False, hoverinfo="skip"
+                ))
+                # overlay contours (lines only)
+                fig.add_trace(go.Contour(
+                    z=Z, x=x_vals, y=y_vals,
+                    showscale=False,
+                    ncontours=int(n_levels),
+                    contours=dict(coloring='lines', showlabels=False),
+                    line=dict(color=line_color, width=2, dash=line_dash),
+                    name="f contours", hoverinfo="skip"
+                ))
+            else:
+                # contours only (clean look)
+                fig.add_trace(go.Contour(
+                    z=Z, x=x_vals, y=y_vals,
+                    showscale=False,
+                    ncontours=int(n_levels),
+                    contours=dict(coloring='lines', showlabels=False),
+                    line=dict(color=line_color, width=2, dash=line_dash),
+                    name="f contours", hoverinfo="skip"
+                ))
 
             # Level curve at maximum (highlight)
             fig.add_trace(go.Contour(
@@ -230,7 +231,6 @@ if update:
                 boundary_color = "royalblue"
                 boundary_dash = "solid" if operator == "==" else "dash"
 
-                # Try solve for y(x)
                 y_solutions = solve(constraint_eq, y_sym)
                 if y_solutions:
                     y_func = lambdify(x_sym, y_solutions[0], 'numpy')
@@ -238,7 +238,6 @@ if update:
                     y_line = y_func(x_line)
                     mask = np.isfinite(y_line) & (y_line >= ymin) & (y_line <= ymax)
                     x_line = x_line[mask]; y_line = y_line[mask]
-
                     if x_line.size > 1:
                         fig.add_trace(go.Scatter(
                             x=x_line, y=y_line, mode='lines',
@@ -247,7 +246,6 @@ if update:
                             hovertemplate=f"{lhs_str.strip()} = {rhs_val:g}<extra></extra>"
                         ))
                 else:
-                    # Try solve for x(y)
                     x_solutions = solve(constraint_eq, x_sym)
                     if x_solutions:
                         x_func = lambdify(y_sym, x_solutions[0], 'numpy')
@@ -255,7 +253,6 @@ if update:
                         x_line = x_func(y_line)
                         mask = np.isfinite(x_line) & (x_line >= xmin) & (x_line <= xmax)
                         x_line = x_line[mask]; y_line = y_line[mask]
-
                         if y_line.size > 1:
                             fig.add_trace(go.Scatter(
                                 x=x_line, y=y_line, mode='lines',
@@ -268,18 +265,17 @@ if update:
             except Exception as e:
                 warning_placeholder.warning(f"Failed to plot constraint boundary: {e}")
 
-            # --- Layout (clean, like pilot) ---
+            # --- Layout (clean, visible) ---
             axis_common = dict(
                 tickfont=dict(size=label_font_size, color='black'),
                 showline=True, linewidth=1, linecolor="rgba(0,0,0,0.25)",
                 mirror=False, ticks="outside", ticklen=6, tickwidth=1,
                 zeroline=False
             )
-
             fig.update_layout(
                 template="plotly_white",
-                height=700,
-                title=dict(text="Constrained Optimization – Clean Contours", x=0.0,
+                height=720,
+                title=dict(text="Constrained Optimization – Robust View", x=0.0,
                            font=dict(size=label_font_size+2)),
                 xaxis=dict(
                     title=dict(text="x", font=dict(size=label_font_size, color='black')),
@@ -302,11 +298,10 @@ if update:
                 plot_bgcolor="white",
                 paper_bgcolor="white",
             )
-
             if equal_axes:
                 fig.update_yaxes(scaleanchor="x", scaleratio=1)
 
-            # MAIN PLOT FIRST
+            # MAIN PLOT
             plot_placeholder.plotly_chart(fig, use_container_width=True)
 
             # Optional diagnostics
