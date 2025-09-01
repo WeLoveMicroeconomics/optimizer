@@ -5,7 +5,7 @@ from sympy import symbols, sympify, lambdify, Eq, solve
 from scipy.optimize import minimize
 
 st.set_page_config(layout="wide")
-st.title("Constrained Optimization Visualizer (Dual Backend)")
+st.title("Constrained Optimization Visualizer (Compact Plot)")
 
 # -------- Inputs --------
 col_in, col_style = st.columns([2, 1])
@@ -29,7 +29,7 @@ with col_style:
     n_levels = st.slider("Number of contour levels", 5, 20, 9, 1)
     show_feasible = st.toggle("Show feasible fill", value=True)
     equal_axes = st.toggle("Equal axis scale", value=True)
-    label_font_size = st.slider("Label font size", 10, 22, 14)
+    label_font_size = st.slider("Label font size", 8, 22, 12)
     show_diag = st.toggle("Show diagnostics", value=False)
 
 update = st.button("Update Plot")
@@ -117,29 +117,21 @@ if update:
         # Matplotlib backend
         # =========================
         if backend.startswith("Matplotlib"):
-            try:
-                import matplotlib.pyplot as plt
-            except Exception:
-                st.error("Matplotlib is not installed. Add `matplotlib>=3.8.0` to requirements.txt and rerun.")
-                st.stop()
+            import matplotlib.pyplot as plt
 
-            fig, ax = plt.subplots(figsize=(4, 3), dpi=120)
+            # compact figure
+            fig, ax = plt.subplots(figsize=(3.6, 2.7), dpi=120, constrained_layout=False)
 
-            # feasible fill (subtle)
             if show_feasible:
                 feas = feasible_mask.astype(float)
                 feas[~feasible_mask] = np.nan
                 ax.contourf(X, Y, feas, levels=[0.5, 1.5], colors=["#1e90ff33"], alpha=0.3)
 
-            # contours (lines only, pilot style)
             color = (colors.split(",")[0] or "black").strip()
             style = (linestyles.split(",")[0] or "-").strip()
-            CS = ax.contour(X, Y, Z, levels=n_levels, colors=color, linestyles=style, linewidths=1.8)
-
-            # level @ optimum (highlight)
+            ax.contour(X, Y, Z, levels=n_levels, colors=color, linestyles=style, linewidths=1.8)
             ax.contour(X, Y, Z, levels=[max_val], colors="crimson", linestyles="-", linewidths=2.4)
 
-            # optimum point + gradient arrow
             ax.plot([max_point[0]], [max_point[1]], marker="o", color="crimson", ms=6, mec="white", mew=0.8)
             arrow_scale = 0.6
             ax.annotate("∇f",
@@ -148,7 +140,6 @@ if update:
                         arrowprops=dict(arrowstyle="->", lw=1.8, color="crimson"),
                         color="crimson", fontsize=label_font_size)
 
-            # constraint boundary
             try:
                 constraint_eq = Eq(lhs_sym, rhs_val)
                 y_solutions = solve(constraint_eq, y_sym)
@@ -171,13 +162,14 @@ if update:
                 st.warning(f"Failed to plot constraint boundary: {e}")
 
             ax.set_xlim(xmin, xmax); ax.set_ylim(ymin, ymax)
-            ax.set_xlabel("x", fontsize=label_font_size)
-            ax.set_ylabel("y", fontsize=label_font_size)
-            ax.set_title("Constrained Optimization – Clean Contours", fontsize=label_font_size+2)
-            ax.grid(True, color="0.9", linewidth=0.8)
+            ax.set_xlabel("x", fontsize=label_font_size-2, labelpad=2)
+            ax.set_ylabel("y", fontsize=label_font_size-2, labelpad=2)
+            ax.set_title("Constrained Optimization – Clean Contours", fontsize=label_font_size, pad=6)
+            ax.tick_params(axis="both", labelsize=label_font_size-3, length=3, width=0.8)
             if equal_axes: ax.set_aspect("equal", adjustable="box")
 
-            st.pyplot(fig, clear_figure=True)
+            fig.tight_layout(pad=0.3)
+            st.pyplot(fig, clear_figure=True, bbox_inches="tight", pad_inches=0.05)
 
         # =========================
         # Plotly backend
@@ -185,108 +177,18 @@ if update:
         else:
             line_color = (colors.split(",")[0] or "black").strip()
             line_dash = mpl_ls_to_plotly_dash((linestyles.split(",")[0] or "-").strip())
-
             fig = go.Figure()
-
-            if show_feasible:
-                feas = feasible_mask.astype(float)
-                feas[~feasible_mask] = np.nan
-                fig.add_trace(go.Contour(
-                    z=feas, x=x_vals, y=y_vals,
-                    showscale=False,
-                    contours=dict(coloring='heatmap', showlines=False),
-                    name='Feasible region', hoverinfo="skip",
-                    opacity=0.18,
-                    colorscale=[[0, 'rgba(0,0,0,0)'], [1, 'rgba(30,144,255,1)']]
-                ))
-
             fig.add_trace(go.Contour(
                 z=Z, x=x_vals, y=y_vals,
-                showscale=False,
-                ncontours=int(n_levels),
+                showscale=False, ncontours=int(n_levels),
                 contours=dict(coloring='lines', showlabels=False),
                 line=dict(color=line_color, width=2, dash=line_dash),
                 name="f contours", hoverinfo="skip"
             ))
-
-            fig.add_trace(go.Contour(
-                z=Z, x=x_vals, y=y_vals,
-                contours=dict(start=max_val, end=max_val, size=1e-9,
-                              coloring='lines', showlabels=False),
-                showscale=False, line=dict(color='crimson', width=3),
-                name='Level @ optimum', hoverinfo="skip"
-            ))
-
-            fig.add_trace(go.Scatter(
-                x=[max_point[0]], y=[max_point[1]],
-                mode='markers+text',
-                marker=dict(color='crimson', size=10, line=dict(color='white', width=1)),
-                text=['optimum'], textposition='top center',
-                name='Optimum',
-                hovertemplate="x=%{x:.4f}<br>y=%{y:.4f}<br>f(x,y)=%{customdata:.4f}<extra></extra>",
-                customdata=np.array([[max_val]])
-            ))
-
-            try:
-                constraint_eq = Eq(lhs_sym, rhs_val)
-                boundary_dash = "solid" if operator == "==" else "dash"
-                boundary_color = "royalblue"
-                y_solutions = solve(constraint_eq, y_sym)
-                if y_solutions:
-                    y_func = lambdify(x_sym, y_solutions[0], 'numpy')
-                    x_line = np.linspace(xmin, xmax, 800)
-                    y_line = y_func(x_line)
-                    mask = np.isfinite(y_line) & (y_line >= ymin) & (y_line <= ymax)
-                    if mask.any():
-                        fig.add_trace(go.Scatter(
-                            x=x_line[mask], y=y_line[mask], mode='lines',
-                            line=dict(color=boundary_color, width=3, dash=boundary_dash),
-                            name='Constraint boundary',
-                            hovertemplate=f"{lhs_str.strip()} = {rhs_val:g}<extra></extra>"
-                        ))
-                else:
-                    x_solutions = solve(constraint_eq, x_sym)
-                    if x_solutions:
-                        x_func = lambdify(y_sym, x_solutions[0], 'numpy')
-                        y_line = np.linspace(ymin, ymax, 800)
-                        x_line = x_func(y_line)
-                        mask = np.isfinite(x_line) & (x_line >= xmin) & (x_line <= xmax)
-                        if mask.any():
-                            fig.add_trace(go.Scatter(
-                                x=x_line[mask], y=y_line[mask], mode='lines',
-                                line=dict(color=boundary_color, width=3, dash=boundary_dash),
-                                name='Constraint boundary',
-                                hovertemplate=f"{lhs_str.strip()} = {rhs_val:g}<extra></extra>"
-                            ))
-            except Exception as e:
-                st.warning(f"Failed to plot constraint boundary: {e}")
-
-            axis_common = dict(
-                tickfont=dict(size=label_font_size, color='black'),
-                showline=True, linewidth=1, linecolor="rgba(0,0,0,0.25)",
-                mirror=False, ticks="outside", ticklen=6, tickwidth=1, zeroline=False
-            )
-            fig.update_layout(
-                template="plotly_white",
-                height=720,
-                title=dict(text="Constrained Optimization – Clean Contours", x=0.0,
-                           font=dict(size=label_font_size+2)),
-                xaxis=dict(title=dict(text="x", font=dict(size=label_font_size, color='black')),
-                           range=[xmin, xmax], **axis_common),
-                yaxis=dict(title=dict(text="y", font=dict(size=label_font_size, color='black')),
-                           range=[ymin, ymax], **axis_common),
-                legend=dict(orientation='h', yanchor="bottom", y=1.02, xanchor="left", x=0.0),
-                margin=dict(l=40, r=20, t=60, b=40),
-                plot_bgcolor="white", paper_bgcolor="white",
-            )
-            if equal_axes:
-                fig.update_yaxes(scaleanchor="x", scaleratio=1)
-
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=False)
 
         if show_diag:
-            st.write(f"[diag] grid size: {X.shape} | Z range: [{zmin:.3g}, {zmax:.3g}]")
-            st.write(f"[diag] optimum: ({max_point[0]:.4f}, {max_point[1]:.4f})  f={max_val:.4f}")
+            st.write(f"[diag] optimum: ({max_point[0]:.4f}, {max_point[1]:.4f}) f={max_val:.4f}")
 
         st.markdown(
             f"**Function**: `{f_expr}` &nbsp; | &nbsp; **Constraint**: `{constraint}`  \n"
