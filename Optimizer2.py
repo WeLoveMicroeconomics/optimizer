@@ -139,20 +139,20 @@ if update:
             else:
                 feasible_mask = np.abs(lhs_grid - rhs_val) < 1e-6
 
-            # --- Contour levels (line-only) ---
+            # --- Contour levels (single-trace, line-only) ---
             zmin = float(np.nanmin(Z))
             zmax = float(np.nanmax(Z))
+            if not np.isfinite(zmin) or not np.isfinite(zmax):
+                warning_placeholder.error("Function produced non-finite values on the grid.")
+                st.stop()
             if np.isclose(zmin, zmax):
                 zmin -= 1.0
                 zmax += 1.0
-            level_step = (zmax - zmin) / (n_levels + 1)
-            level_vals = np.linspace(zmin + level_step, zmax - level_step, n_levels)
 
-            # --- Style cycles ---
-            color_list = [c.strip() for c in colors.split(",") if c.strip()]
-            style_list = [s.strip() for s in linestyles.split(",") if s.strip()]
-            def pick_color(i): return color_list[i % len(color_list)]
-            def pick_dash(i): return mpl_ls_to_plotly_dash(style_list[i % len(style_list)])
+            # Pick first color & linestyle from the inputs
+            line_color = (colors.split(",")[0] or "black").strip()
+            first_ls = (linestyles.split(",")[0] or "-").strip()
+            line_dash = mpl_ls_to_plotly_dash(first_ls)
 
             # =========================
             # Build Figure
@@ -175,21 +175,23 @@ if update:
                     colorscale=[[0, 'rgba(0,0,0,0)'], [1, 'rgba(30,144,255,1)']]
                 ))
 
-            # f(x,y) contours: line-only, multiple levels
-            for i, lvl in enumerate(level_vals):
-                fig.add_trace(go.Contour(
-                    z=Z,
-                    x=x_vals,
-                    y=y_vals,
-                    contours=dict(
-                        start=lvl, end=lvl, size=1e-9,
-                        coloring='lines', showlabels=False
-                    ),
-                    showscale=False,
-                    line=dict(color=pick_color(i), dash=pick_dash(i), width=2),
-                    name="f contours" if i == 0 else None,
-                    hoverinfo="skip"
-                ))
+            # f(x,y) contours: single trace with multiple levels
+            fig.add_trace(go.Contour(
+                z=Z,
+                x=x_vals,
+                y=y_vals,
+                showscale=False,
+                contours=dict(
+                    coloring='lines',
+                    start=float(zmin + (zmax - zmin) / (n_levels + 1)),
+                    end=float(zmax - (zmax - zmin) / (n_levels + 1)),
+                    size=float((zmax - zmin) / (n_levels)),
+                    showlabels=False
+                ),
+                line=dict(color=line_color, width=2, dash=line_dash),
+                name="f contours",
+                hoverinfo="skip"
+            ))
 
             # Level curve at maximum (highlight)
             fig.add_trace(go.Contour(
@@ -306,6 +308,13 @@ if update:
             # Equal axes like pilot style (circle looks like a circle)
             if equal_axes:
                 fig.update_yaxes(scaleanchor="x", scaleratio=1)
+
+            # ===== DIAGNOSTICS (safe to remove later) =====
+            st.write(f"[diag] traces: {len(fig.data)}")
+            _zfinite = int(np.isfinite(Z).sum())
+            st.write(f"[diag] Z finite count: {_zfinite} / {Z.size}")
+            st.plotly_chart(go.Figure(data=[go.Scatter(x=[0, 1], y=[0, 1])]), use_container_width=True)
+            # ===== END DIAGNOSTICS =====
 
             plot_placeholder.plotly_chart(fig, use_container_width=True)
 
