@@ -177,7 +177,7 @@ if update:
             ax.grid(True, color="0.9", linewidth=0.8)
             if equal_axes: ax.set_aspect("equal", adjustable="box")
 
-            st.pyplot(fig)
+            st.pyplot(fig, clear_figure=True)
 
         # =========================
         # Plotly backend
