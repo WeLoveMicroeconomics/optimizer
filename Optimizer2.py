@@ -34,11 +34,13 @@ with col_style:
     show_grid = st.toggle("Show grid", value=True)
     equal_axes = st.toggle("Equal axis scale", value=True)
     label_font_size = st.slider("Label font size", 10, 22, 14)
+    show_diag = st.toggle("Show diagnostics", value=False)
 
 update = st.button("Update Plot")
 
 warning_placeholder = st.empty()
 plot_placeholder = st.empty()
+diag_placeholder = st.empty()
 explanation_placeholder = st.empty()
 
 # =========================
@@ -139,7 +141,7 @@ if update:
             else:
                 feasible_mask = np.abs(lhs_grid - rhs_val) < 1e-6
 
-            # --- Contour levels (single-trace, line-only) ---
+            # --- Contour levels (robust form) ---
             zmin = float(np.nanmin(Z))
             zmax = float(np.nanmax(Z))
             if not np.isfinite(zmin) or not np.isfinite(zmax):
@@ -175,19 +177,13 @@ if update:
                     colorscale=[[0, 'rgba(0,0,0,0)'], [1, 'rgba(30,144,255,1)']]
                 ))
 
-            # f(x,y) contours: single trace with multiple levels
+            # f(x,y) contours: single trace with ncontours (line-only)
             fig.add_trace(go.Contour(
                 z=Z,
                 x=x_vals,
                 y=y_vals,
                 showscale=False,
-                contours=dict(
-                    coloring='lines',
-                    start=float(zmin + (zmax - zmin) / (n_levels + 1)),
-                    end=float(zmax - (zmax - zmin) / (n_levels + 1)),
-                    size=float((zmax - zmin) / (n_levels)),
-                    showlabels=False
-                ),
+                contours=dict(coloring='lines', showlabels=False, ncontours=int(n_levels)),
                 line=dict(color=line_color, width=2, dash=line_dash),
                 name="f contours",
                 hoverinfo="skip"
@@ -215,17 +211,6 @@ if update:
                 hovertemplate="x=%{x:.4f}<br>y=%{y:.4f}<br>f(x,y)=%{customdata:.4f}<extra></extra>",
                 customdata=np.array([[max_val]])
             ))
-
-            # Gradient arrow at optimum
-            arrow_scale = 0.6
-            arrow_x = float(max_point[0] + arrow_scale * grad[0])
-            arrow_y = float(max_point[1] + arrow_scale * grad[1])
-            fig.add_annotation(
-                x=arrow_x, y=arrow_y, ax=float(max_point[0]), ay=float(max_point[1]),
-                xref="x", yref="y", axref="x", ayref="y",
-                text="∇f", showarrow=True, arrowsize=1.2, arrowwidth=2, arrowcolor="crimson",
-                font=dict(size=label_font_size, color="crimson")
-            )
 
             # Constraint boundary: explicit line (solid for ==, dashed for <=)
             try:
@@ -281,6 +266,7 @@ if update:
 
             fig.update_layout(
                 template="plotly_white",
+                height=700,  # make sure it's visible
                 title=dict(text="Constrained Optimization – Clean Contours", x=0.0,
                            font=dict(size=label_font_size+2)),
                 xaxis=dict(
@@ -305,18 +291,19 @@ if update:
                 paper_bgcolor="white",
             )
 
-            # Equal axes like pilot style (circle looks like a circle)
             if equal_axes:
                 fig.update_yaxes(scaleanchor="x", scaleratio=1)
 
-            # ===== DIAGNOSTICS (safe to remove later) =====
-            st.write(f"[diag] traces: {len(fig.data)}")
-            _zfinite = int(np.isfinite(Z).sum())
-            st.write(f"[diag] Z finite count: {_zfinite} / {Z.size}")
-            st.plotly_chart(go.Figure(data=[go.Scatter(x=[0, 1], y=[0, 1])]), use_container_width=True)
-            # ===== END DIAGNOSTICS =====
-
+            # MAIN PLOT FIRST
             plot_placeholder.plotly_chart(fig, use_container_width=True)
+
+            # Optional diagnostics
+            if show_diag:
+                with diag_placeholder.container():
+                    st.write(f"[diag] traces: {len(fig.data)}")
+                    _zfinite = int(np.isfinite(Z).sum())
+                    st.write(f"[diag] Z finite count: {_zfinite} / {Z.size}")
+                    st.plotly_chart(go.Figure(data=[go.Scatter(x=[0, 1], y=[0, 1])]), use_container_width=True)
 
             explanation_placeholder.markdown(f"""
 **Function**: `{f_expr}`  
