@@ -96,7 +96,7 @@ if update:
                         val = val.item()
                     if np.isnan(val):
                         return 1e10
-                    # NOTE: SciPy minimizes -> negate to maximize
+                    # SciPy minimizes; negate to maximize
                     return -val
                 except Exception:
                     return 1e10
@@ -123,7 +123,7 @@ if update:
                     grad[i] = (f1 - f2) / (2 * eps)
                 return grad
 
-            grad = -num_grad(objective, max_point)  # back to ∇f
+            grad = -num_grad(objective, max_point)  # ∇f
 
             # --- Grid + fields ---
             x_vals = np.linspace(xmin, xmax, 400)
@@ -139,10 +139,9 @@ if update:
             else:
                 feasible_mask = np.abs(lhs_grid - rhs_val) < 1e-6
 
-            # --- Contour levels (line only, like pilot) ---
+            # --- Contour levels (line-only) ---
             zmin = float(np.nanmin(Z))
             zmax = float(np.nanmax(Z))
-            # guard if flat:
             if np.isclose(zmin, zmax):
                 zmin -= 1.0
                 zmax += 1.0
@@ -162,7 +161,6 @@ if update:
 
             # Feasible region (optional, subtle)
             if show_feasible:
-                # show only feasible area as faint fill
                 feasible_float = feasible_mask.astype(float)
                 feasible_float[~feasible_mask] = np.nan
                 fig.add_trace(go.Contour(
@@ -177,7 +175,7 @@ if update:
                     colorscale=[[0, 'rgba(0,0,0,0)'], [1, 'rgba(30,144,255,1)']]
                 ))
 
-            # f(x,y) contours: line-only, multiple levels like the pilot
+            # f(x,y) contours: line-only, multiple levels
             for i, lvl in enumerate(level_vals):
                 fig.add_trace(go.Contour(
                     z=Z,
@@ -216,7 +214,7 @@ if update:
                 customdata=np.array([[max_val]])
             ))
 
-            # Gradient arrow at optimum (annotation with arrowhead)
+            # Gradient arrow at optimum
             arrow_scale = 0.6
             arrow_x = float(max_point[0] + arrow_scale * grad[0])
             arrow_y = float(max_point[1] + arrow_scale * grad[1])
@@ -272,22 +270,31 @@ if update:
                 warning_placeholder.warning(f"Failed to plot constraint boundary: {e}")
 
             # --- Layout (clean, like pilot) ---
-            # Optional gridlines via light axis lines + ticks
             axis_common = dict(
-                titlefont=dict(size=label_font_size, color='black'),
                 tickfont=dict(size=label_font_size, color='black'),
                 showline=True, linewidth=1, linecolor="rgba(0,0,0,0.25)",
                 mirror=False, ticks="outside", ticklen=6, tickwidth=1,
-                zeroline=False, gridcolor="rgba(0,0,0,0.08)" if show_grid else None,
-                showgrid=show_grid,
+                zeroline=False
             )
 
             fig.update_layout(
                 template="plotly_white",
                 title=dict(text="Constrained Optimization – Clean Contours", x=0.0,
                            font=dict(size=label_font_size+2)),
-                xaxis=dict(title="x", range=[xmin, xmax], **axis_common),
-                yaxis=dict(title="y", range=[ymin, ymax], **axis_common),
+                xaxis=dict(
+                    title=dict(text="x", font=dict(size=label_font_size, color='black')),
+                    range=[xmin, xmax],
+                    showgrid=show_grid,
+                    gridcolor="rgba(0,0,0,0.08)" if show_grid else None,
+                    **axis_common
+                ),
+                yaxis=dict(
+                    title=dict(text="y", font=dict(size=label_font_size, color='black')),
+                    range=[ymin, ymax],
+                    showgrid=show_grid,
+                    gridcolor="rgba(0,0,0,0.08)" if show_grid else None,
+                    **axis_common
+                ),
                 font=dict(family="Arial", size=label_font_size, color='black'),
                 legend=dict(orientation='h', yanchor="bottom", y=1.02, xanchor="left", x=0.0,
                             bgcolor="rgba(255,255,255,0.7)", bordercolor="rgba(0,0,0,0.1)", borderwidth=1),
