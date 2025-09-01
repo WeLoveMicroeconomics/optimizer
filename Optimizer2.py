@@ -177,13 +177,14 @@ if update:
                     colorscale=[[0, 'rgba(0,0,0,0)'], [1, 'rgba(30,144,255,1)']]
                 ))
 
-            # f(x,y) contours: single trace with ncontours (line-only)
+            # f(x,y) contours: single trace with multiple levels (lines only)
             fig.add_trace(go.Contour(
                 z=Z,
                 x=x_vals,
                 y=y_vals,
                 showscale=False,
-                contours=dict(coloring='lines', showlabels=False, ncontours=int(n_levels)),
+                ncontours=int(n_levels),  # <-- FIX: at trace level
+                contours=dict(coloring='lines', showlabels=False),
                 line=dict(color=line_color, width=2, dash=line_dash),
                 name="f contours",
                 hoverinfo="skip"
@@ -211,6 +212,17 @@ if update:
                 hovertemplate="x=%{x:.4f}<br>y=%{y:.4f}<br>f(x,y)=%{customdata:.4f}<extra></extra>",
                 customdata=np.array([[max_val]])
             ))
+
+            # Gradient arrow at optimum
+            arrow_scale = 0.6
+            arrow_x = float(max_point[0] + arrow_scale * grad[0])
+            arrow_y = float(max_point[1] + arrow_scale * grad[1])
+            fig.add_annotation(
+                x=arrow_x, y=arrow_y, ax=float(max_point[0]), ay=float(max_point[1]),
+                xref="x", yref="y", axref="x", ayref="y",
+                text="∇f", showarrow=True, arrowsize=1.2, arrowwidth=2, arrowcolor="crimson",
+                font=dict(size=label_font_size, color="crimson")
+            )
 
             # Constraint boundary: explicit line (solid for ==, dashed for <=)
             try:
@@ -266,7 +278,7 @@ if update:
 
             fig.update_layout(
                 template="plotly_white",
-                height=700,  # make sure it's visible
+                height=700,
                 title=dict(text="Constrained Optimization – Clean Contours", x=0.0,
                            font=dict(size=label_font_size+2)),
                 xaxis=dict(
