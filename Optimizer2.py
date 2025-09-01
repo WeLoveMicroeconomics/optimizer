@@ -133,10 +133,10 @@ if show_feasible:
     ax.contourf(X, Y, feas, levels=[0.5, 1.5], colors=["#1e90ff33"], alpha=0.35)
 
 # f(x,y) contours (lines only)
-ax.contour(X, Y, Z, levels=n_levels, colors="black", linestyles="-", linewidths=1.6)
+ax.contour(X, Y, Z, levels=n_levels, colors="black", linestyles="-", linewidths=1.2)
 
 # Level curve at optimum
-ax.contour(X, Y, Z, levels=[max_val], colors="crimson", linestyles="-", linewidths=2.2)
+ax.contour(X, Y, Z, levels=[max_val], colors="crimson", linestyles="-", linewidths=1.4)
 
 # Optimum marker & gradient arrow
 ax.plot([max_point[0]], [max_point[1]], marker="o", color="crimson", ms=5, mec="white", mew=0.8)
@@ -158,7 +158,7 @@ try:
         x_line = np.linspace(xmin, xmax, 800)
         y_line = y_func(x_line)
         mask = np.isfinite(y_line) & (y_line >= ymin) & (y_line <= ymax)
-        ax.plot(x_line[mask], y_line[mask], bstyle, color="royalblue", lw=2.0)
+        ax.plot(x_line[mask], y_line[mask], bstyle, color="royalblue", lw=1.2)
     else:
         x_solutions = solve(constraint_eq, x_sym)
         if x_solutions:
