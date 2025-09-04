@@ -3,7 +3,7 @@ import io
 import numpy as np
 import streamlit as st
 import matplotlib.pyplot as plt
-from sympy import symbols, sympify, lambdify, Eq, solve
+from sympy import symbols, sympify, lambdify, Eq, solve, Min, Max
 from scipy.optimize import minimize
 
 st.set_page_config(layout="centered")
@@ -38,19 +38,21 @@ if xmin >= xmax or ymin >= ymax:
 # ========= Build functions =========
 x_sym, y_sym = symbols("x y")
 try:
-    f_sym = sympify(f_expr, evaluate=False)
+    # Map Python-style min/max → Sympy Min/Max
+    f_sym = sympify(
+        f_expr,
+        locals={"min": Min, "max": Max},
+        evaluate=False
+    )
 except Exception as e:
     st.error(f"Could not parse f(x,y): {e}")
     st.stop()
 
-if f_expr.strip().lower().startswith("min"):
-    def f_func(xv, yv): return np.minimum(xv, yv)
-else:
-    try:
-        f_func = lambdify((x_sym, y_sym), f_sym, "numpy")
-    except Exception as e:
-        st.error(f"Could not lambdify f(x,y): {e}")
-        st.stop()
+try:
+    f_func = lambdify((x_sym, y_sym), f_sym, modules=["numpy"])
+except Exception as e:
+    st.error(f"Could not lambdify f(x,y): {e}")
+    st.stop()
 
 # Constraint parse
 if "<=" in constraint:
