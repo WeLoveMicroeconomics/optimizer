@@ -143,12 +143,22 @@ ax.contour(X, Y, Z, levels=[max_val], colors="crimson", linestyles="-", linewidt
 # Optimum marker & gradient arrow
 ax.plot([max_point[0]], [max_point[1]], marker="o", color="crimson", ms=5, mec="white", mew=0.8)
 arrow_scale = 0.6
+# ========= Normalized gradient arrow at optimum =========
+grad_norm = np.linalg.norm(grad)
+if grad_norm > 0:
+    grad_unit = grad / grad_norm
+else:
+    grad_unit = grad  # zero gradient case
+
+arrow_length = 0.6  # controls the visual length of the arrow
 ax.annotate("∇f",
             xy=(max_point[0], max_point[1]),
-            xytext=(max_point[0] + arrow_scale*grad[0], max_point[1] + arrow_scale*grad[1]),
+            xytext=(max_point[0] + arrow_length*grad_unit[0], 
+                    max_point[1] + arrow_length*grad_unit[1]),
             textcoords="data",
             arrowprops=dict(arrowstyle="->", lw=1.6, color="crimson"),
             color="crimson", fontsize=base_fs)
+
 
 # Constraint boundary
 try:
