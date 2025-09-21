@@ -140,25 +140,8 @@ ax.contour(X, Y, Z, levels=n_levels, colors="black", linestyles="-", linewidths=
 # Level curve at optimum
 ax.contour(X, Y, Z, levels=[max_val], colors="crimson", linestyles="-", linewidths=1.2)
 
-# Optimum marker & gradient arrow
+# Optimum marker (gradient arrow removed)
 ax.plot([max_point[0]], [max_point[1]], marker="o", color="crimson", ms=5, mec="white", mew=0.8)
-arrow_scale = 0.6
-# ========= Normalized gradient arrow at optimum =========
-grad_norm = np.linalg.norm(grad)
-if grad_norm > 0:
-    grad_unit = grad / grad_norm
-else:
-    grad_unit = grad  # zero gradient case
-
-arrow_length = 0.6  # controls the visual length of the arrow
-ax.annotate("∇f",
-            xy=(max_point[0], max_point[1]),
-            xytext=(max_point[0] + arrow_length*grad_unit[0], 
-                    max_point[1] + arrow_length*grad_unit[1]),
-            textcoords="data",
-            arrowprops=dict(arrowstyle="->", lw=1.6, color="crimson"),
-            color="crimson", fontsize=base_fs)
-
 
 # Constraint boundary
 try:
@@ -176,9 +159,8 @@ try:
         if x_solutions:
             x_func = lambdify(y_sym, x_solutions[0], "numpy")
             y_line = np.linspace(ymin, ymax, 800)
-            x_line = x_func(y_line)
-            mask = np.isfinite(x_line) & (x_line >= xmin) & (x_line <= xmax)
-            ax.plot(x_line[mask], y_line[mask], bstyle, color="royalblue", lw=1.0)
+            mask = np.isfinite(x_func(y_line)) & (x_func(y_line) >= xmin) & (x_func(y_line) <= xmax)
+            ax.plot(x_func(y_line)[mask], y_line[mask], bstyle, color="royalblue", lw=1.0)
 except Exception as e:
     st.warning(f"Constraint boundary could not be drawn: {e}")
 
